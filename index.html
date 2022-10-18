@@ -312,7 +312,7 @@
             const dataStr = 'data:text/yml;charset=utf-8,' + encodeURIComponent(yamlString);
             const downloadAnchorNode = document.createElement('a');
             downloadAnchorNode.setAttribute('href', dataStr);
-            downloadAnchorNode.setAttribute('download', 'dcoker-compose.yml');
+            downloadAnchorNode.setAttribute('download', 'docker-compose.yml');
             document.body.appendChild(downloadAnchorNode); // required for firefox
             downloadAnchorNode.click();
             downloadAnchorNode.remove();
