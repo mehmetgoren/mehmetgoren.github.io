@@ -149,6 +149,13 @@
 
             <div v-show="currentstep === 1">
                 <div class="form-group">
+                    <label for="version">Version</label>
+                    <select class="form-control" name="version" v-model="model.version">
+                        <option v-for="version in versions" :value="version">{{version}}</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
                     <label for="select">Add Redis and MongoDB entries to Docker-Compose YAML file?</label>
                     <select class="form-control" name="select" v-model="model.includeRedisMongo">
                         <option :value="true">Yes</option>
@@ -195,8 +202,7 @@
                 <div class="form-group">
                     <label for="rootPath">Path</label>
                     <input v-model="model.rootPath" name="rootPath" class="form-control">
-                    <small class="form-text text-muted">A root directory path for all AI and recoding
-                        data.</small>
+                    <small class="form-text text-muted">A root directory path for all AI and recoding data.</small>
                 </div>
             </div>
 
@@ -218,8 +224,9 @@
                         <option :value="false">No</option>
                     </select>
                     <small class="form-text text-muted"> Make sure to install
-                        <a href="https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html" target="_blank">
-                             The NVIDIA Container Toolkit
+                        <a href="https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html"
+                            target="_blank">
+                            The NVIDIA Container Toolkit
                         </a>
                         if you have a Nvidia GPU.
                     </small>
@@ -269,6 +276,11 @@
                         <option :value="false">No</option>
                     </select>
                 </div>
+                <div class="form-group">
+                    <label for="snapShotProcCount">Snapshot Service Process Count</label>
+                    <input class="form-control" name="snapShotProcCount" v-model="model.snapShotProcCount"  type="number"/>
+                    <small class="form-text text-muted">This number let the snapshot service use more cores of your CPU but it increases memory usage dramatically.</small>
+                </div>
             </div>
 
             <step v-for="step in steps" :currentstep="currentstep" :key="step.id" :step="step" @on-generate="onGenerate"
@@ -299,7 +311,7 @@
         const downloadObjectAsYaml = (yamlString) => {
             const dataStr = 'data:text/yml;charset=utf-8,' + encodeURIComponent(yamlString);
             const downloadAnchorNode = document.createElement('a');
-            downloadAnchorNode.setAttribute('href',     dataStr);
+            downloadAnchorNode.setAttribute('href', dataStr);
             downloadAnchorNode.setAttribute('download', 'dcoker-compose.yml');
             document.body.appendChild(downloadAnchorNode); // required for firefox
             downloadAnchorNode.click();
@@ -307,7 +319,7 @@
         };
 
         const createImageTag = (model) => {
-            return `v1.0.0-${(model.device === 1 ? 'amd64' : 'arm64v8')}`;
+            return `${model.version}-${(model.device === 1 ? 'amd64' : 'arm64v8')}`;
         };
 
         const createDefaultEnvVariables = (model) => {
@@ -401,6 +413,8 @@
             env.push(`DEEPSTACK_FR=${model.frEnabled ? 1 : 0}`);
 
             env.push(`ROOT_DIR_PATH=${model.rootPath}`);
+
+            env.push(`SNAPSHOT_PROC_COUNT=${model.snapShotProcCount}`);
 
             mngr.environment = env;
 
@@ -628,7 +642,7 @@
             return jetson;
         };
 
-        const createFr = (model) =>{
+        const createFr = (model) => {
             const fr = {
                 image: `gokalpgoren/face_recognition_pytorch:${createImageTag(model)}`,
                 container_name: 'face_recognition_pytorch-instance', restart: 'unless-stopped', network_mode: 'host'
@@ -680,7 +694,7 @@
             return alpr;
         };
 
-        const createDeepStack = (model) =>{
+        const createDeepStack = (model) => {
             const ds = {
                 image: `gokalpgoren/deepstack_service:${createImageTag(model)}`,
                 container_name: 'deepstack_service-instance', restart: 'unless-stopped', network_mode: 'host'
@@ -733,13 +747,13 @@
                         js.services.detect_service_jetson = createOdJetson(model);
                     }
                 }
-                if (model.frEnabled){
+                if (model.frEnabled) {
                     js.services.face_recognition_pytorch = createFr(model);
                 }
             } else if (model.aiServiceType === 2) { //DeepStack
                 js.services.deepstack_service = createDeepStack(model);
             }
-            if (model.alprEnabled){
+            if (model.alprEnabled) {
                 js.services.alpr = createAlpr(model);
             }
             const yaml = jsyaml.dump(js);
@@ -825,6 +839,7 @@
                 }
             });
 
+            const versions = ['v1.0.0'];
             const app = new Vue({
                 el: '#app',
                 data() {
@@ -833,7 +848,7 @@
                         steps: [
                             {
                                 id: 1,
-                                title: "Database",
+                                title: "Version and Database",
                                 icon_class: "bi-1-circle"
                             },
                             {
@@ -862,10 +877,11 @@
                                 icon_class: "bi-cpu"
                             }
                         ],
+                        versions,
                         model: {
-                            includeRedisMongo: false, device: 1, rootPath: '', redis_host: '127.0.0.1', redis_port: 6379,
+                            version: versions[0], includeRedisMongo: false, device: 1, rootPath: '', redis_host: '127.0.0.1', redis_port: 6379,
                             mongo_conn_str: 'mongodb://localhost:27017', timeZone: 'Europe/London', hasNvidiaGpu: true, aiServiceType: 1,
-                            odEnabled: true, frEnabled: false, alprEnabled: false, cv2ReadEnabled: false, feniksOdType: 1,
+                            odEnabled: true, frEnabled: false, alprEnabled: false, cv2ReadEnabled: false, feniksOdType: 1, snapShotProcCount: 1
 
                         },
                         timeZones,
