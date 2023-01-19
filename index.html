@@ -196,13 +196,18 @@
                         <option :value="3">Raspberry PI 4</option>
                     </select>
                 </div>
+                <div class="form-group" v-if="model.device===2">
+                    <label for="jetPackDirPath">Jetson Inference Directory Path</label>
+                    <input v-model="model.jetPackDirPath" name="jetPackDirPath" class="form-control">
+                    <small class="form-text text-muted">Nvidia JetPack SDK must be installed on your Jetson devices</small>
+                </div>
             </div>
 
             <div v-show="currentstep === 3">
                 <div class="form-group">
-                    <label for="rootPath">Path</label>
-                    <input v-model="model.rootPath" name="rootPath" class="form-control">
-                    <small class="form-text text-muted">A root directory path for all AI and recoding data.</small>
+                    <label for="dirPaths">Directory Paths</label>
+                    <input v-model="model.dirPaths" name="dirPaths" class="form-control">
+                    <small class="form-text text-muted">Root directory paths for all AI and recording data. Use semicolon to separate directory paths</small>
                 </div>
             </div>
 
@@ -269,7 +274,7 @@
                         <option :value="false">No</option>
                     </select>
                 </div>
-                <div class="form-group">
+                <div class="form-group" v-if="showOpenCvRtspReaderService">
                     <label for="cv2ReadEnabled">Enable OpenCV RTSP Reader Service?</label>
                     <select class="form-control" name="cv2ReadEnabled" v-model="model.cv2ReadEnabled">
                         <option :value="true">Yes</option>
@@ -278,8 +283,10 @@
                 </div>
                 <div class="form-group">
                     <label for="snapShotProcCount">Snapshot Service Process Count</label>
-                    <input class="form-control" name="snapShotProcCount" v-model="model.snapShotProcCount"  type="number"/>
-                    <small class="form-text text-muted">This number let the snapshot service use more cores of your CPU but it increases memory usage dramatically.</small>
+                    <input class="form-control" name="snapShotProcCount" v-model="model.snapShotProcCount"
+                        type="number" />
+                    <small class="form-text text-muted">This number let the snapshot service use more cores of your CPU
+                        but it increases memory usage dramatically.</small>
                 </div>
             </div>
 
@@ -335,8 +342,11 @@
             if (dockerSocket) {
                 arr.push("/var/run/docker.sock:/var/run/docker.sock");
             }
-            if (model) {
-                arr.push(`${model.rootPath}:${model.rootPath}`)
+            if (model&&model.dirPaths) {
+                const splits = model.dirPaths.split(',');
+                splits.forEach((split) => {
+                    arr.push(`${split}:${split}`);
+                });
             }
             return arr;
         };
@@ -412,7 +422,7 @@
             env.push(`DEEPSTACK_OD=${model.odEnabled ? 1 : 0}`);
             env.push(`DEEPSTACK_FR=${model.frEnabled ? 1 : 0}`);
 
-            env.push(`ROOT_DIR_PATH=${model.rootPath}`);
+            env.push(`ROOT_DIR_PATHS=${model.dirPaths}`);
 
             env.push(`SNAPSHOT_PROC_COUNT=${model.snapShotProcCount}`);
 
@@ -631,11 +641,11 @@
             v.push('/tmp/.X11-unix/:/tmp/.X11-unix');
             v.push('/tmp/argus_socket:/tmp/argus_socket');
             v.push('/etc/enctune.conf:/etc/enctune.conf');
-            v.push('/home/gokalp/Documents/jetson-inference/data:/jetson-inference/data');
-            v.push('/home/gokalp/Documents/jetson-inference/python/training/classification/data:/jetson-inference/python/training/classification/data');
-            v.push('/home/gokalp/Documents/jetson-inference/python/training/classification/models:/jetson-inference/python/training/classification/models');
-            v.push('/home/gokalp/Documents/jetson-inference/python/training/detection/ssd/data:/jetson-inference/python/training/detection/ssd/data');
-            v.push('/home/gokalp/Documents/jetson-inference/python/training/detection/ssd/models:/jetson-inference/python/training/detection/ssd/models gokalpgoren/detect_service_jetson:v1.0.0-arm64');
+            v.push(`${model.jetPackDirPath}/data:/jetson-inference/data`);
+            v.push(`${model.jetPackDirPath}/python/training/classification/data:/jetson-inference/python/training/classification/data`);
+            v.push(`${model.jetPackDirPath}/python/training/classification/models:/jetson-inference/python/training/classification/models`);
+            v.push(`${model.jetPackDirPath}/python/training/detection/ssd/data:/jetson-inference/python/training/detection/ssd/data`);
+            v.push(`${model.jetPackDirPath}/python/training/detection/ssd/models:/jetson-inference/python/training/detection/ssd/models gokalpgoren/detect_service_jetson:v1.0.0-arm64`);
 
             jetson.volumes = v;
 
@@ -858,7 +868,7 @@
                             },
                             {
                                 id: 3,
-                                title: "Root Directory Path",
+                                title: "Root Directory Paths",
                                 icon_class: "bi-folder"
                             },
                             {
@@ -879,14 +889,16 @@
                         ],
                         versions,
                         model: {
-                            version: versions[0], includeRedisMongo: false, device: 1, rootPath: '', redis_host: '127.0.0.1', redis_port: 6379,
+                            version: versions[0], includeRedisMongo: false, device: 1, dirPaths: '', redis_host: '127.0.0.1', redis_port: 6379,
                             mongo_conn_str: 'mongodb://localhost:27017', timeZone: 'Europe/London', hasNvidiaGpu: true, aiServiceType: 1,
-                            odEnabled: true, frEnabled: false, alprEnabled: false, cv2ReadEnabled: false, feniksOdType: 1, snapShotProcCount: 1
+                            odEnabled: true, frEnabled: false, alprEnabled: false, cv2ReadEnabled: false, feniksOdType: 1, snapShotProcCount: 1,
+                            jetPackDirPath:'/home/{user}/Documents/jetson-inference'
 
                         },
                         timeZones,
                         hi: 'hi',
                         mode: 0,
+                        showOpenCvRtspReaderService: false,
                     }
                 },
                 methods: {
@@ -900,7 +912,7 @@
                 },
                 computed: {
                     nextStepDisabled() {
-                        return this.currentstep === this.steps.length || (this.currentstep === 3 && !this.model.rootPath)
+                        return this.currentstep === this.steps.length || (this.currentstep === 3 && !this.model.dirPaths)
                     }
                 },
                 watch: {
