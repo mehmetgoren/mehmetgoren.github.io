@@ -849,7 +849,7 @@
                 }
             });
 
-            const versions = ['v1.0.0'];
+            const versions = ['v1.0.0', 'v1.0.1'];
             const app = new Vue({
                 el: '#app',
                 data() {
@@ -889,7 +889,7 @@
                         ],
                         versions,
                         model: {
-                            version: versions[0], includeRedisMongo: false, device: 1, dirPaths: '', redis_host: '127.0.0.1', redis_port: 6379,
+                            version: versions[versions.length-1], includeRedisMongo: false, device: 1, dirPaths: '', redis_host: '127.0.0.1', redis_port: 6379,
                             mongo_conn_str: 'mongodb://localhost:27017', timeZone: 'Europe/London', hasNvidiaGpu: true, aiServiceType: 1,
                             odEnabled: true, frEnabled: false, alprEnabled: false, cv2ReadEnabled: false, feniksOdType: 1, snapShotProcCount: 1,
                             jetPackDirPath:'/home/{user}/Documents/jetson-inference'
