@@ -222,8 +222,8 @@
 
             <div v-show="currentstep === 5">
                 <div class="form-group">
-                    <label for="time_zones">Do you have a Nvidia GPU?</label>
-                    <select class="form-control" name="select" v-model="model.hasNvidiaGpu"
+                    <label for="hasNvidiaGpu">Do you have a Nvidia GPU?</label>
+                    <select class="form-control" name="hasNvidiaGpu" v-model="model.hasNvidiaGpu"
                         :disabled="model.device!==1">
                         <option :value="true">Yes</option>
                         <option :value="false">No</option>
@@ -234,6 +234,16 @@
                             The NVIDIA Container Toolkit
                         </a>
                         if you have a Nvidia GPU.
+                    </small>
+                </div>
+                <div class="form-group">
+                    <label for="hasCoralTpu">Do you have a Coral TPU?</label>
+                    <select class="form-control" name="hasCoralTpu" v-model="model.hasCoralTpu"
+                        :disabled="model.device===2">
+                        <option :value="true">Yes</option>
+                        <option :value="false">No</option>
+                    </select>
+                    <small class="form-text text-muted">Support is only tested with Coral TPU USB as of now.
                     </small>
                 </div>
             </div>
@@ -257,7 +267,8 @@
                     <label for="feniksOdType">Feniks Object Detection Technology?</label>
                     <select class="form-control" name="feniksOdType" v-model="model.feniksOdType">
                         <option :value="1">PyTorch</option>
-                        <option :value="2">Tenserflow</option>
+                        <option :value="2">Tensorflow</option>
+                        <option :value="3" :disabled="!model.hasCoralTpu">Tensorflow Lite (Coral TPU)</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -651,6 +662,38 @@
 
             return jetson;
         };
+        
+        const createOdCoral = (model) => {
+            const coral = {
+                image: `gokalpgoren/detect_service_coral:${createImageTag(model)}`,
+                container_name: 'detect_service_coral-instance', restart: 'unless-stopped', network_mode: 'host'
+            };
+
+            coral.depends_on = [];
+            if (model.includeRedisMongo) {
+                coral.depends_on.push('redis');
+            }
+            coral.depends_on.push('ffmpeg_service');
+            coral.depends_on.push('snapshot_service');
+            coral.depends_on.push('smcp');
+            
+            coral.devices = [];
+            
+            coral.devices.push('/dev/bus/usb:/dev/bus/usb');
+
+            env = [];
+            env.push(...createDefaultEnvVariables(model));
+            if (model.hasNvidiaGpu) {
+                env.push('NVIDIA_DRIVER_CAPABILITIES=all');
+            }
+            coral.environment = env;
+
+            if (model.hasNvidiaGpu) {
+                coral.deploy = createNvidiaGpuObj();
+            }
+
+            return coral;
+        };
 
         const createFr = (model) => {
             const fr = {
@@ -752,9 +795,14 @@
                             case 2:
                                 js.services.detect_service_tf = createOdTf(model);
                                 break;
+                            case 3:
+                                js.services.detect_service_coral = createOdCoral(model);
+                                break;                    
                         }
                     } else if (model.device === 2) { // Jetson {
                         js.services.detect_service_jetson = createOdJetson(model);
+                    } else if (model.device === 3 ) { // Rpi4
+                    	js.services.detect_service_coral = createOdCoral(model);
                     }
                 }
                 if (model.frEnabled) {
@@ -878,7 +926,7 @@
                             },
                             {
                                 id: 5,
-                                title: "GPU",
+                                title: "GPU/TPU",
                                 icon_class: "bi-gpu-card"
                             },
                             {
@@ -890,7 +938,7 @@
                         versions,
                         model: {
                             version: versions[versions.length-1], includeRedisMongo: false, device: 1, dirPaths: '', redis_host: '127.0.0.1', redis_port: 6379,
-                            mongo_conn_str: 'mongodb://localhost:27017', timeZone: 'Europe/London', hasNvidiaGpu: true, aiServiceType: 1,
+                            mongo_conn_str: 'mongodb://localhost:27017', timeZone: 'Europe/London', hasNvidiaGpu: true, hasCoralTpu: false, aiServiceType: 1,
                             odEnabled: true, frEnabled: false, alprEnabled: false, cv2ReadEnabled: false, feniksOdType: 1, snapShotProcCount: 1,
                             jetPackDirPath:'/home/{user}/Documents/jetson-inference'
 
@@ -919,6 +967,10 @@
                     model: {
                         handler(newModel) {
                             console.log(JSON.stringify(this.model));
+                            
+                            if(newModel.hasCoralTpu) {
+                            	this.model.feniksOdType = 3;
+                            }
                         },
                         deep: true
                     }
