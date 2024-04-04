@@ -190,7 +190,7 @@
             <div v-show="currentstep === 2">
                 <div class="form-group">
                     <label for="select">Device</label>
-                    <select class="form-control" name="select" v-model="model.device">
+                    <select class="form-control" name="select" v-model="model.device" disabled>
                         <option :value="1">X86 PC</option>
                         <option :value="2">Nvidia Jetson</option>
                         <option :value="3">Raspberry PI 4</option>
@@ -241,23 +241,15 @@
             <div v-show="currentstep === 6">
                 <div class="form-group">
                     <label for="aiServiceType">AI Service Type</label>
-                    <select class="form-control" name="aiServiceType" v-model="model.aiServiceType">
-                        <option :value="1">Feniks AI Services</option>
-                        <option :value="2">DeepStack AI Service</option>
+                    <select class="form-control" name="aiServiceType" v-model="model.aiServiceType" disabled>
+                        <option :value="1">CodeProject.AI-Server</option>
                     </select>
                 </div>
-                <div class="form-group">
+                <!-- <div class="form-group">
                     <label for="odEnabled">Enable Object Detection?</label>
                     <select class="form-control" name="odEnabled" v-model="model.odEnabled">
                         <option :value="true">Yes</option>
                         <option :value="false">No</option>
-                    </select>
-                </div>
-                <div class="form-group" v-show="model.aiServiceType===1&&model.device===1&&model.odEnabled">
-                    <label for="feniksOdType">Feniks Object Detection Technology?</label>
-                    <select class="form-control" name="feniksOdType" v-model="model.feniksOdType">
-                        <option :value="1">PyTorch</option>
-                        <option :value="2">Tenserflow</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -268,19 +260,19 @@
                     </select>
                 </div>
                 <div class="form-group">
+                    <label for="fdEnabled">Enable Facial Detection?</label>
+                    <select class="form-control" name="fdEnabled" v-model="model.fdEnabled">
+                        <option :value="true">Yes</option>
+                        <option :value="false">No</option>
+                    </select>
+                </div>
+                <div class="form-group">
                     <label for="alprEnabled">Enable Licence Plate Detection?</label>
                     <select class="form-control" name="alprEnabled" v-model="model.alprEnabled">
                         <option :value="true">Yes</option>
                         <option :value="false">No</option>
                     </select>
-                </div>
-                <div class="form-group" v-if="showOpenCvRtspReaderService">
-                    <label for="cv2ReadEnabled">Enable OpenCV RTSP Reader Service?</label>
-                    <select class="form-control" name="cv2ReadEnabled" v-model="model.cv2ReadEnabled">
-                        <option :value="true">Yes</option>
-                        <option :value="false">No</option>
-                    </select>
-                </div>
+                </div> -->
                 <div class="form-group">
                     <label for="snapShotProcCount">Snapshot Service Process Count</label>
                     <input class="form-control" name="snapShotProcCount" v-model="model.snapShotProcCount"
@@ -413,14 +405,8 @@
             env.push('WEBSERVER_PORT=8072');
             env.push(`MONGODB_CS=${model.mongo_conn_str}`);
 
-            let dt = model.hasNvidiaGpu ? 1 : 0;
-            if (dt === 0 && model.device !== 1) {
-                dt = model.device;
-            }
-
-            env.push(`DEEPSTACK_DT=${dt}`);
-            env.push(`DEEPSTACK_OD=${model.odEnabled ? 1 : 0}`);
-            env.push(`DEEPSTACK_FR=${model.frEnabled ? 1 : 0}`);
+            const senseAiImageType = model.hasNvidiaGpu ? 2 : 0;
+            env.push(`SENSE_AI_IMAGE=${senseAiImageType}`);
 
             env.push(`ROOT_DIR_PATHS=${model.dirPaths}`);
 
@@ -505,26 +491,6 @@
 
         };
 
-        const createOnvf = (model) => {
-            const onvf = {
-                image: `gokalpgoren/onvf:${createImageTag(model)}`,
-                container_name: 'onvf-instance', restart: 'unless-stopped', network_mode: 'host'
-            };
-
-            if (model.includeRedisMongo) {
-                onvf.depends_on = [];
-                onvf.depends_on.push('redis');
-            }
-
-            env = [];
-            env.push(...createDefaultEnvVariables(model));
-            onvf.environment = env;
-
-            onvf.volumes = createVolumes(true, null);
-
-            return onvf;
-        };
-
         const createWebApp = (model) => {
             const webApp = {
                 image: `gokalpgoren/webapp:${createImageTag(model)}`,
@@ -544,170 +510,10 @@
 
         };
 
-        const createCv2ReadService = (model) => {
-            const cv2 = {
-                image: `gokalpgoren/cv2_read_service:${createImageTag(model)}`,
-                container_name: 'cv2_read_service-instance', restart: 'unless-stopped', network_mode: 'host'
-            };
-
-            cv2.depends_on = [];
-            cv2.depends_on.push('redis');
-
-            env = [];
-            env.push(...createDefaultEnvVariables(model));
-            cv2.environment = env;
-
-            return cv2
-        };
-
-        const createOdPytorch = (model) => {
-            const pytorch = {
-                image: `gokalpgoren/detect_service_pytorch:${createImageTag(model)}`,
-                container_name: 'detect_service_pytorch-instance', restart: 'unless-stopped', network_mode: 'host'
-            };
-
-            pytorch.depends_on = [];
-            if (model.includeRedisMongo) {
-                pytorch.depends_on.push('redis');
-            }
-            pytorch.depends_on.push('ffmpeg_service');
-            pytorch.depends_on.push('snapshot_service');
-            pytorch.depends_on.push('smcp');
-
-            env = [];
-            env.push(...createDefaultEnvVariables(model));
-            if (model.hasNvidiaGpu) {
-                env.push('NVIDIA_DRIVER_CAPABILITIES=all');
-            }
-            pytorch.environment = env;
-
-            if (model.hasNvidiaGpu) {
-                pytorch.deploy = createNvidiaGpuObj();
-            }
-
-            return pytorch;
-        };
-
-        const createOdTf = (model) => {
-            const tf = {
-                image: `gokalpgoren/detect_service_tf:${createImageTag(model)}`,
-                container_name: 'detect_service_tf-instance', restart: 'unless-stopped', network_mode: 'host'
-            };
-
-            tf.depends_on = [];
-            if (model.includeRedisMongo) {
-                tf.depends_on.push('redis');
-            }
-            tf.depends_on.push('ffmpeg_service');
-            tf.depends_on.push('snapshot_service');
-            tf.depends_on.push('smcp');
-
-            env = [];
-            env.push(...createDefaultEnvVariables(model));
-            if (model.hasNvidiaGpu) {
-                env.push('NVIDIA_DRIVER_CAPABILITIES=all');
-            }
-            tf.environment = env;
-
-            if (model.hasNvidiaGpu) {
-                tf.deploy = createNvidiaGpuObj();
-            }
-
-            return tf;
-        };
-
-        const createOdJetson = (model) => {
-            const jetson = {
-                image: `gokalpgoren/detect_service_jetson:${createImageTag(model)}`,
-                container_name: 'detect_service_jetson-instance', restart: 'unless-stopped', network_mode: 'host'
-            };
-
-            jetson.depends_on = [];
-            if (model.includeRedisMongo) {
-                jetson.depends_on.push('redis');
-            }
-            jetson.depends_on.push('ffmpeg_service');
-            jetson.depends_on.push('snapshot_service');
-            jetson.depends_on.push('smcp');
-
-            jetson.runtime = "nvidia"
-
-            env = [];
-            env.push(...createDefaultEnvVariables(model));
-            env.push('DISPLAY=$DISPLAY');
-            jetson.environment = env;
-
-            v = [];
-            v.push('/tmp/.X11-unix/:/tmp/.X11-unix');
-            v.push('/tmp/argus_socket:/tmp/argus_socket');
-            v.push('/etc/enctune.conf:/etc/enctune.conf');
-            v.push(`${model.jetPackDirPath}/data:/jetson-inference/data`);
-            v.push(`${model.jetPackDirPath}/python/training/classification/data:/jetson-inference/python/training/classification/data`);
-            v.push(`${model.jetPackDirPath}/python/training/classification/models:/jetson-inference/python/training/classification/models`);
-            v.push(`${model.jetPackDirPath}/python/training/detection/ssd/data:/jetson-inference/python/training/detection/ssd/data`);
-            v.push(`${model.jetPackDirPath}/python/training/detection/ssd/models:/jetson-inference/python/training/detection/ssd/models gokalpgoren/detect_service_jetson:v1.0.0-arm64`);
-
-            jetson.volumes = v;
-
-            return jetson;
-        };
-
-        const createFr = (model) => {
-            const fr = {
-                image: `gokalpgoren/face_recognition_pytorch:${createImageTag(model)}`,
-                container_name: 'face_recognition_pytorch-instance', restart: 'unless-stopped', network_mode: 'host'
-            };
-
-            fr.depends_on = [];
-            if (model.includeRedisMongo) {
-                fr.depends_on.push('redis');
-            }
-            fr.depends_on.push('ffmpeg_service');
-            fr.depends_on.push('snapshot_service');
-            fr.depends_on.push('smcp');
-
-            env = [];
-            env.push(...createDefaultEnvVariables(model));
-            if (model.hasNvidiaGpu) {
-                env.push('NVIDIA_DRIVER_CAPABILITIES=all');
-            }
-            fr.environment = env;
-
-            if (model.hasNvidiaGpu) {
-                fr.deploy = createNvidiaGpuObj();
-            }
-
-            fr.volumes = createVolumes(false, model);
-
-            return fr;
-        };
-
-        const createAlpr = (model) => {
-            const alpr = {
-                image: `gokalpgoren/alpr:${createImageTag(model)}`,
-                container_name: 'alpr-instance', restart: 'unless-stopped', network_mode: 'host'
-            };
-
-            alpr.depends_on = [];
-            if (model.includeRedisMongo) {
-                alpr.depends_on.push('redis');
-            }
-            alpr.depends_on.push('ffmpeg_service');
-
-            env = [];
-            env.push(...createDefaultEnvVariables(model));
-            alpr.environment = env;
-
-            alpr.volumes = createVolumes(true, null);
-            alpr.volumes.push('/tmp/alpr:/tmp/alpr');
-
-            return alpr;
-        };
-
-        const createDeepStack = (model) => {
+        const createSenseAi = (model) => {
             const ds = {
-                image: `gokalpgoren/deepstack_service:${createImageTag(model)}`,
-                container_name: 'deepstack_service-instance', restart: 'unless-stopped', network_mode: 'host'
+                image: `gokalpgoren/senseai_service:${createImageTag(model)}`,
+                container_name: 'senseai_service-instance', restart: 'unless-stopped', network_mode: 'host'
             };
 
             ds.depends_on = [];
@@ -736,36 +542,9 @@
             js.services.mngr = createMngr(model);
             js.services.ffmpeg_service = createFFmpeg(model);
             js.services.snapshot_service = createSnapshot(model);
+            js.services.senseai_service = createSenseAi(model);
             js.services.smcp = createSmcp(model);
-            js.services.onvf = createOnvf(model);
             js.services.webapp = createWebApp(model);
-            if (model.cv2ReadEnabled) {
-                js.services.cv2_read_service = createCv2ReadService(model);
-            }
-            if (model.aiServiceType === 1) { //Feniks
-                if (model.odEnabled) {
-                    if (model.device == 1) { // x86 PC
-                        switch (model.feniksOdType) {
-                            case 1:
-                                js.services.detect_service_pytorch = createOdPytorch(model);
-                                break;
-                            case 2:
-                                js.services.detect_service_tf = createOdTf(model);
-                                break;
-                        }
-                    } else if (model.device === 2) { // Jetson {
-                        js.services.detect_service_jetson = createOdJetson(model);
-                    }
-                }
-                if (model.frEnabled) {
-                    js.services.face_recognition_pytorch = createFr(model);
-                }
-            } else if (model.aiServiceType === 2) { //DeepStack
-                js.services.deepstack_service = createDeepStack(model);
-            }
-            if (model.alprEnabled) {
-                js.services.alpr = createAlpr(model);
-            }
             const yaml = jsyaml.dump(js);
             return yaml.replaceAll("'[gpu]'", "[ gpu ]");
         };
@@ -849,7 +628,7 @@
                 }
             });
 
-            const versions = ['v1.0.0', 'v1.0.1'];
+            const versions = ['v1.0.2'];
             const app = new Vue({
                 el: '#app',
                 data() {
@@ -891,7 +670,7 @@
                         model: {
                             version: versions[versions.length-1], includeRedisMongo: false, device: 1, dirPaths: '', redis_host: '127.0.0.1', redis_port: 6379,
                             mongo_conn_str: 'mongodb://localhost:27017', timeZone: 'Europe/London', hasNvidiaGpu: true, aiServiceType: 1,
-                            odEnabled: true, frEnabled: false, alprEnabled: false, cv2ReadEnabled: false, feniksOdType: 1, snapShotProcCount: 1,
+                            odEnabled: true, frEnabled: false, fdEnabled: false, alprEnabled: false, snapShotProcCount: 4,
                             jetPackDirPath:'/home/{user}/Documents/jetson-inference'
 
                         },
