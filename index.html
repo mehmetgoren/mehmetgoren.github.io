@@ -168,10 +168,10 @@
                         <ul>
                             <li>redis: docker run --name redis-instance -p 6379:6379 --restart unless-stopped -d
                                 redis redis-server --save 60 1 --loglevel warning</li>
-                            <li>mangodb (x86 PC): docker run -p 27017:27017 --name mongo-instance --restart
-                                unless-stopped mongo:latest</li>
-                            <li>mangodb (ARM64 V8): docker run -p 27017:27017 --name mongo-instance --restart
-                                unless-stopped mongo:4.2.22 </li>
+                            <li>mongodb (x86 PC): docker run -p 27017:27017 --name mongo-instance --restart
+                                unless-stopped -d mongo:latest</li>
+                            <li>mongodb (ARM64 V8): docker run -p 27017:27017 --name mongo-instance --restart
+                                unless-stopped -d mongo:4.2.22 </li>
                         </ul>
                     </small>
                     <label v-if="!model.includeRedisMongo" for="redis_host">Redis Host</label>
